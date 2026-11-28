@@ -93,6 +93,37 @@ class Test_categorical_ring(NoAuthTestCase):
         assert math.fabs(rs.min() - 500) < 0.1
         assert math.fabs(rs.max() - 800) < 0.1
 
+    def _partial_order_graph(self, cats: List[str]):
+        n = len(cats)
+        return (
+            LGFull()
+            .edges(pd.DataFrame({'s': list(range(n)), 'd': [(i + 1) % n for i in range(n)]}), 's', 'd')
+            .nodes(pd.DataFrame({'id': list(range(n)), 'cat': cats}))
+        )
+
+    def test_partial_order_unhandled_first_appearance(self):
+        # many unhandled values so a hash/set iteration order would not match by chance
+        cats = ['alpha'] + [f'v{i}' for i in range(12)]
+        g = self._partial_order_graph(cats)
+        for append_unhandled, expected in [
+            (True, cats),
+            (False, cats[1:] + ['alpha'])
+        ]:
+            out = g.ring_categorical_layout('cat', order=['alpha'], drop_empty=False, append_unhandled=append_unhandled)
+            labels = [row['label'] for row in out._complex_encodings['node_encodings']['default']['pointAxisEncoding']['rows']]
+            assert labels == expected
+            r_by_cat = dict(zip(out._nodes['cat'], out._nodes['r']))
+            assert [r_by_cat[c] for c in expected] == sorted(r_by_cat.values())
+
+    def test_partial_order_not_mutated(self):
+        g = self._partial_order_graph(['a', 'b', 'c'])
+        my_order = ['a']
+        out1 = g.ring_categorical_layout('cat', order=my_order, drop_empty=False)
+        assert my_order == ['a']
+        out2 = g.ring_categorical_layout('cat', order=my_order, drop_empty=False)
+        assert my_order == ['a']
+        assert out1._nodes['r'].tolist() == out2._nodes['r'].tolist()
+
     @pytest.mark.skipif(
         not ("TEST_CUDF" in os.environ and os.environ["TEST_CUDF"] == "1"),
         reason="cudf tests need TEST_CUDF=1")

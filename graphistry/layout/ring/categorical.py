@@ -189,21 +189,25 @@ def ring_categorical(
             raise ValueError(f'Unexpected engine, expected "all", "pandas", or "cudf", received: {engine} => {engine_concrete}')
 
     if order is None:
-        order = unique()
+        order = list(unique())
     else:
         assert len(order) == len(set(order)), "order must not contain duplicate values"
+        order = list(order)
 
     if drop_empty:
         order_hits = set(order) & set(unique())
         order = [x for x in order if x in order_hits]
     
-    unhandled = set(unique()) - set(order)
+    order_set = set(order)
+    # keep first-appearance order so ring assignment does not depend on set/hash order
+    unhandled_ordered = [v for v in unique() if v not in order_set]
+    unhandled = set(unhandled_ordered)
     if len(unhandled) > 0:
         if not combine_unhandled:
             if append_unhandled:
-                order += list(unhandled)
+                order = order + unhandled_ordered
             else:
-                order = list(unhandled) + order
+                order = unhandled_ordered + order
 
     val_to_ring: Dict[Any, int] = {
         v: i if not reverse else len(order) - i - 1
